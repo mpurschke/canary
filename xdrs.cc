@@ -252,7 +252,7 @@ int process_event (Event * e)
       cfd( trace0, cfd0);
 
       double xstart  = find_zero_crossing(cfd0);
-      cout << " event " << e->getEvtSequence() << " cfd zero = " << xstart << endl;
+      //cout << " event " << e->getEvtSequence() << " cfd zero = " << xstart << endl;
       if ( xstart < 5) return 0;
 
       double  xsignal = 0;  // "signal" is a keyword

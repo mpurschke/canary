@@ -10,34 +10,33 @@
 
 #include <TH1.h>
 #include <TH2.h>
+#include <TMath.h>
+#include <TF1.h>
 
 int init_done = 0;
 
 using namespace std;
 
-//TH1F *h1; 
-//TH2F *h2; 
 
-
-int baseline_limit=200;
-int integral_start=310;
+int baseline_limit=60;
+int integral_start=400;
 
 
 TH1F *trace[4];
 
+TH1F *trace0;
+
 TH1F *h_signal;
-// TH1F *h_signal_in;
-// TH1F *h_signal_out;
 
 TH1F *tdelta;
 TH1F *ttimeline_zs =0;
 TH1F *ttimeline =0;
-// TH1F *ttimeline_in =0;
-// TH1F *ttimeline_out =0;
 
 TH2F *x2;
 
 TH1F *h_baseline;
+
+TH1F *cfd0; 
 
 unsigned long long  res = 1000000000;   // from clockres system call
 
@@ -78,22 +77,21 @@ int pinit()
       //trace[i]->SetOptStat(0);
 
     }
-  trace[0]->SetLineColor(kViolet-4);
-  trace[1]->SetLineColor(kBlue);
+  trace[0]->SetLineColor(kBlue);
+  trace[1]->SetLineColor(kViolet-4);
   trace[2]->SetLineColor(kPink+10);
   trace[3]->SetLineColor(kCyan);
 
+  trace0 = new TH1F( "trace0", "channel 0 WF rebinned", 256, -0, 1024);
+  trace0->GetXaxis()->SetTitle("Sample Number");
+  trace0->GetYaxis()->SetTitle("Amplitude [mv]");
+  trace0->SetLineWidth(2);
+  trace0->SetLineColor(kBlue);
+
+  
   h_signal = new TH1F( "h_signal", "signal height distribution", 512, 0, 100);
   h_signal->GetXaxis()->SetTitle("signal height [mV]");
   h_signal->GetYaxis()->SetTitle("counts");
-
-  // h_signal_in = new TH1F( "h_signal_in", "signal height distribution during high rates", 512, 0, 100);
-  // h_signal_in->GetXaxis()->SetTitle("signal height [mV]");
-  // h_signal_in->GetYaxis()->SetTitle("counts");
-
-  // h_signal_out = new TH1F( "h_signal_out", "signal height distribution during low rates", 512, 0, 100);
-  // h_signal_out->GetXaxis()->SetTitle("signal height [mV]");
-  // h_signal_out->GetYaxis()->SetTitle("counts");
 
 
   tdelta = new TH1F( "tdelta", "time difference distribution", 512, 0, 5*res);
@@ -111,9 +109,56 @@ int pinit()
   x2->SetXTitle("Sample Nr");
   x2->SetYTitle("Signal");
 
+  cfd0 = new TH1F( "cfd0", "CFD Signal", 256, 0, 1024);
+
+  
   return 0;
   
 }
+
+
+void cfd( TH1F *h, TH1F *cfd, const int delay = 50, const double fraction = 0.6)
+{
+
+  cfd->Reset();
+
+  int i;
+
+  for ( i = 1; i < h->GetNbinsX() - delay -1; i++)
+    {
+      Double_t d = h->GetBinContent(i) - fraction * h->GetBinContent(i+delay);
+      cfd->SetBinContent(i, d);
+    }
+      
+}
+
+double find_zero_crossing(TH1F *h)
+{
+
+  int zc_bin;
+  //cout << "max, min bin : " <<   h->GetMaximumBin() << " " << h->GetMinimumBin() << endl;
+  
+  for ( zc_bin = h->GetMaximumBin(); zc_bin < h->GetMinimumBin(); zc_bin++)
+    {
+      // cout << "zc_bin : " <<  zc_bin << endl;
+      if ( h->GetBinContent(zc_bin) <= 0 ) return h->GetBinCenter(zc_bin); 
+      //      if ( h->GetBinContent(zc_bin) >= 0 ) break; //return h->GetBinCenter(zc_bin); 
+    }
+  return 0;
+  
+  // Double_t range = h->GetMaximumBin() - h->GetMinimumBin();
+  // range  *= 0.25;
+  // int from = zc_bin - range;
+  // int to = zc_bin + range;
+
+  // h->Fit("pol1", "" , "", from,  to);
+  // TF1 *x = h->GetFunction("pol1");
+
+  // Double_t zc = -1 * x->GetParameter(0) / x->GetParameter(1);
+  
+  // return zc;
+}
+
 
 int old_runnumber = -1;  // impossible value
 int starttime = 0;
@@ -126,27 +171,6 @@ int process_event (Event * e)
   // see if we have either the begin-run event or get a new run number
   if ( e->getEvtType() == BEGRUNEVENT || e->getRunNumber() != old_runnumber)
     {
-
-  
-      // this for run 121 only
-      // lowbound.push_back( 230);
-      // highbound.push_back(380);
-      
-      // lowbound.push_back( 1591);
-      // highbound.push_back(1998);
-      
-      // lowbound.push_back( 4011);
-      // highbound.push_back( 4339);
-      
-      // lowbound.push_back( 7090);
-      // highbound.push_back( 7430);
-      
-      // lowbound.push_back( 11169);
-      // highbound.push_back( 11491);
-      
-      // cout << "size is  " << lowbound.size() << endl;
-      
-
 
       old_runnumber = e->getRunNumber();
       x2->Reset();
@@ -164,16 +188,6 @@ int process_event (Event * e)
 	  ttimeline->GetXaxis()->SetTitle("time ");
 	  ttimeline->GetXaxis()->SetTimeDisplay(1);
 	  ttimeline->GetYaxis()->SetTitle("events/10s");
-
-	  // ttimeline_in = new TH1F( "ttimeline_in", "event rate during high-rate periods", tbins, tb, te);
-	  // ttimeline_in->GetXaxis()->SetTitle("time ");
-	  // ttimeline_in->GetXaxis()->SetTimeDisplay(1);
-	  // ttimeline_in->GetYaxis()->SetTitle("events/10s");
-
-	  // ttimeline_out = new TH1F( "ttimeline_out", "event rate during low-rate periods", tbins, tb, te);
-	  // ttimeline_out->GetXaxis()->SetTitle("time ");
-	  // ttimeline_out->GetXaxis()->SetTimeDisplay(1);
-	  // ttimeline_out->GetYaxis()->SetTitle("events/10s");
 
 	  ttimeline_zs = new TH1F( "ttimeline_zs", "event rate as function of time, offset subtracted", tbins, 0, 3600*4);
 	  ttimeline_zs->GetXaxis()->SetTitle("time ");
@@ -194,28 +208,6 @@ int process_event (Event * e)
       int delta = e->getTime() -starttime;
       ttimeline_zs->Fill( delta);
 
-      // int its_in = 0;
-      // int its_not_in = 0;
-
-      // cout << "size is  " << lowbound.size() << endl;
-      // for ( int r = 0; r < lowbound.size() ; r++)
-      // 	{
-      // 	  cout << delta << "   "<< lowbound[r] << "  " << highbound[r] << endl;  
-      // 	  if ( delta >= lowbound[r] && delta <= highbound[r])
-      // 	    {
-      // 	      its_in = 1;
-      // 	    }
-
-      // 	  if ( delta >= lowbound[r]-30 && delta <= highbound[r]+30)
-      // 	    {
-      // 	      its_not_in = 1;
-      // 	    }
-      // 	}
-
-      // its_not_in = 1-its_not_in;
-
-      // if ( its_in) ttimeline_in->Fill( e->getTime() );
-      // if ( its_not_in) ttimeline_out->Fill( e->getTime() );
       
       char name[512];
       char title[512];
@@ -227,6 +219,7 @@ int process_event (Event * e)
 	  trace[channel]->Reset();
 	}
 
+      trace0->Reset();
       
       for ( channel = 0; channel < 4 ; channel++)
 	{
@@ -253,13 +246,19 @@ int process_event (Event * e)
 	{
 	  // x2->Fill ( p->rValue(sample,4),  p->rValue(sample,1));
 	  x2->Fill ( sample,  p->rValue(sample,0) -baseline );
+	  trace0->Fill ( sample,  p->rValue(sample,0) -baseline);
 	}
 
+      cfd( trace0, cfd0);
+
+      double xstart  = find_zero_crossing(cfd0);
+      cout << " event " << e->getEvtSequence() << " cfd zero = " << xstart << endl;
+      if ( xstart < 5) return 0;
 
       double  xsignal = 0;  // "signal" is a keyword
       count = 0;  // because I'm lazy
       int take_this = 1; // we set this to 0 if we see that the signal clips
-      for (sample = integral_start; sample < 1024; sample++)
+      for (sample = xstart - 139; sample < xstart - 139 + 510; sample++)
 	{
 	  float s =  p->rValue(sample,0);
 	  if ( s < -495)

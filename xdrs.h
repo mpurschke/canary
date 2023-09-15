@@ -7,4 +7,7 @@
 
 int process_event (Event *e); //++CINT 
 
+void set_baseline_limit(const int l);
+void set_integral_start(const int l);
+
 #endif /* __XDRS_H__ */
